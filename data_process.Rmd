@@ -1,0 +1,131 @@
+---
+title: "data_process"
+author: '2조'
+date: '2021 5 10'
+output: html_document
+---
+
+#라이브러리
+
+```{r}
+#데이터 탐색
+#install.packages("tidyverse")
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+데이터 탐색에 필요한 라이브러리 입니다.
+
+#데이터 수집
+
+```{r}
+train <- read.csv("./data/train.csv", stringsAsFactors=F)
+test <- read.csv("./data/test.csv", stringsAsFactors=F)
+#df<- read.csv("./open/sample_submission.csv", stringsAsFactors=F)
+```
+
+
+#데이터 탐색
+
+  (reference: https://rpubs.com/kdmid/ch05_Exploratory_Data_Analysis)
+```{r}
+glimpse(train) #str과 기능비슷
+# $ FLAG_MOBIL    <int> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,~
+# $ work_phone    <int> 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,~
+# $ phone         <int> 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1,~
+# $ email         <int> 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1,~
+  
+summary(train)
+# FLAG_MOBIL   work_phone         phone       
+# Min.   :1    Min.   :0.0000   Min.   :0.0000  
+# 1st Qu.:1    1st Qu.:0.0000   1st Qu.:0.0000  
+# Median :1    Median :0.0000   Median :0.0000  
+# Mean   :1    Mean   :0.2247   Mean   :0.2943  
+# 3rd Qu.:1    3rd Qu.:0.0000   3rd Qu.:1.0000  
+# Max.   :1    Max.   :1.0000   Max.   :1.0000
+# 
+# email          
+# Min.   :0.00000   
+# 1st Qu.:0.00000  
+# Median :0.00000 
+# Mean   :0.09128
+# Max.   :1.00000 
+
+str(train) 
+# $ FLAG_MOBIL   : int  1 1 1 1 1 1 1 1 1 1 ... 핸드폰 소유 여부
+# $ work_phone   : int  0 0 0 0 0 0 0 0 0 0 ... 업무용 전화 소유 여부
+# $ phone        : int  0 0 1 1 0 0 0 0 0 0 ... 가정용 전화 소유 여부
+# $ email        : int  0 1 0 0 0 1 1 1 1 0 ... 이메일 소유 여부
+```
+train 데이터는 총 20개의 변수와 26457개의 행이 존재합니다. test 데이터는 총 19개의 변수와 10000개의 행이 존재합니다. credit 변수는 종속변수로써 train 데이터에만 속해 있습니다.
+
+##타입변환, 범주형 > 명목형(nominal)
+
+```{r}
+train$FLAG_MOBIL <- as.factor(train$FLAG_MOBIL)
+train$work_phone <- as.factor(train$work_phone)
+train$phone <- as.factor(train$phone)
+train$email <- as.factor(train$email)
+```
+FLAG_MOBIL, work_phone, phone, email 네 개의 변수 모두 소유 여부에 대한 것이므로 범주형(명목형) 변수에 속합니다. 따라서 int로 설정되어 있는 타입을 factor로 변환해줍니다.  
+
+```{r}
+#1) FLAG_MOBIL
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=FLAG_MOBIL))
+train %>% count(FLAG_MOBIL)
+
+#2) work_phone 
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=work_phone))
+train %>% count(work_phone)
+
+#3) phone
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=phone))
+train %>% count(phone)
+
+#4) email
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=email))
+train %>% count(email)
+```
+그래프를 보면 핸드폰은 모든 사람이 가지고 있으므로 해당 변수는 삭제해도 괜찮다고 판단됩니다. 26457명 중 업무용 전화는 5946명, 가정용 전화는 7785명이 소유하고 있으며 이메일은 2415명만이 소유하고 있다고 기록되어 있습니다. 하지만 이메일은 등록하지 않았을 확률도 있을 것 같습니다.
+
+##이상치, 결측치
+
+```{r}
+table(is.na(train$FLAG_MOBIL))
+table(is.na(train$work_phone))
+table(is.na(train$phone))
+table(is.na(train$email))
+```
+
+##covariation
+
+```{r}
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=FLAG_MOBIL))
+
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=work_phone))
+
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=phone))
+
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=email))
+
+# 굳이 소유 여부끼리 연관성은 안살펴봐도 될 것 같다.
+# credit과 범주형 혹은 연속형 변수들의 관계 살펴보면 될 것 같다.
+```
+첫번째를 제외한 변수들 모두 credit이 0 > 1 > 2 로 갈 수록 전화/이메일을 소유하는 사람이 적어지는 형태를 보이고 있습니다. "신용카드를 사용하면 많을 것 같은데 왜일까?" 생각이 들었는데 보니까 credit의 숫자가 작을수록 좋은 신용상태 입니다. 그렇기 때문에 연락수단이 잘 갖춰지지 않은 사람일수록 신용도가 좋지 않음을 생각해 볼 수 있겠습니다.
+
+```{r}
+
+```
+
+```{r}
+
+```
+
