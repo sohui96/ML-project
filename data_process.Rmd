@@ -19,8 +19,8 @@ library(ggplot2)
 #데이터 수집
 
 ```{r}
-train <- read.csv("./data/train.csv", stringsAsFactors=F)
-test <- read.csv("./data/test.csv", stringsAsFactors=F)
+train <- read.csv("./credit/data/train.csv", stringsAsFactors=F)
+test <- read.csv("./credit/data/test.csv", stringsAsFactors=F)
 #df<- read.csv("./open/sample_submission.csv", stringsAsFactors=F)
 ```
 
