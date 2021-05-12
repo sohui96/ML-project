@@ -1,0 +1,160 @@
+---
+title: "data_process2"
+author: '2조'
+date: '2021 5 12'
+output: html_document
+---
+
+#라이브러리
+
+```{r}
+#install.packages("tidyverse")
+#install.packages("data.table")
+
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+
+library(data.table)
+```
+
+#데이터 수집
+
+```{r}
+humid <- read.csv("./weatherdata/weather_Humidity.csv", stringsAsFactors=F)
+precip <- read.csv("./weatherdata/weather_precipitation.csv", stringsAsFactors=F)
+temp <- read.csv("./weatherdata/weather_temp.csv", stringsAsFactors=F)
+wind <- read.csv("./weatherdata/weather_wind.csv", stringsAsFactors=F)
+
+#2017년 ~ 2020년, 21년
+bike_info = data.frame()
+for(i in 20201:20203) {
+  
+  path = paste0("./bike_day_info/공공자전거 이용정보(일별)_", i, ".csv")
+  data = fread(path, stringsAsFactors=F, header=T)
+  bike_info = rbind(bike_info, data)
+  
+}
+names(bike_info) <-  c("date", "num", "place", "code", "sex", "agecode","use","health", "carb", "usedis", "usetime")
+#c("대여일자", "대여소번호", "대여소", "대여구분코드", "성별", "연령대코드","이용건수","운동량", "탄소량", "이동거리(m)", "이용시간(m)")
+bike_info <- as.data.frame(bike_info)
+
+
+
+#as.Date(as.character(bike_info$대여일자), format="%Y-%m-%d")
+# bike201 <- fread("./bike_day_info/공공자전거 이용정보(일별)_20201.csv", stringsAsFactors=F,header=T)
+# bike202 <- fread("./bike_day_info/공공자전거 이용정보(일별)_20202.csv", stringsAsFactors=F, header=T)
+# bike203 <- fread("./bike_day_info/공공자전거 이용정보(일별)_20203.csv", stringsAsFactors=F, header=T)
+# names(bike202) <- c("대여일자", "대여소번호", "대여소", "대여구분코드", "성별", "연령대코드","이용건수","운동량", "탄소량", "이동거리(m)", "이용시간(m)")
+# sample <- rbind(bike201, bike202)
+```
+
+
+#탐색을 위한 전처리..
+
+```{r}
+humid <- humid[,3:4]
+names(humid) <- c("date","mean_h")
+table(is.na(humid))
+sum(!complete.cases(humid))
+summary(humid)
+
+precip <- precip[,3:4]
+names(precip) <- c("data", "mean_p")
+table(is.na(precip))
+sum(!complete.cases(precip))
+summary(precip)
+
+temp <- temp[,3:4]
+names(temp) <- c("data", "mean_t")
+table(is.na(temp))
+sum(!complete.cases(temp))
+summary(temp)
+
+wind <- wind[,3:4]
+names(wind) <- c("data", "mean_w")
+table(is.na(wind))
+sum(!complete.cases(wind))
+summary(wind)
+
+
+
+
+
+
+
+df <- bike_info
+#결측치 유무 확인
+summary(bike_info)
+table(is.na(bike_info[,7]))
+sum(!complete.cases(bike_info[,8]))
+bike_info$sex <- gsub("\\N",NA,bike_info$sex)
+
+bike1 = bike_info %>% filter(num==101)
+
+#write.csv(, "./.csv")
+
+#이상치 유무 확인
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+#1) FLAG_MOBIL
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=FLAG_MOBIL))
+train %>% count(FLAG_MOBIL)
+
+#2) work_phone 
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=work_phone))
+train %>% count(work_phone)
+
+#3) phone
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=phone))
+train %>% count(phone)
+
+#4) email
+ggplot(data=train)+
+  geom_bar(mapping=aes(x=email))
+train %>% count(email)
+```
+
+
+##이상치, 결측치
+
+```{r}
+table(is.na(train$FLAG_MOBIL))
+table(is.na(train$work_phone))
+table(is.na(train$phone))
+table(is.na(train$email))
+```
+
+##covariation
+
+```{r}
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=FLAG_MOBIL))
+
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=work_phone))
+
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=phone))
+
+ggplot(data=train, mapping=aes(x=credit))+
+  geom_freqpoly(mapping=aes(color=email))
+`
+```
