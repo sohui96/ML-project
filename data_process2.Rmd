@@ -5,6 +5,7 @@ date: '2021 5 12'
 output: html_document
 ---
 
+특정 대여소의 시간대별 예측모델
 #라이브러리
 
 ```{r}
@@ -76,8 +77,6 @@ names(wind) <- c("data", "mean_w")
 table(is.na(wind))
 sum(!complete.cases(wind))
 summary(wind)
-
-
 
 
 
