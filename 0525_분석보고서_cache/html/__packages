@@ -16,3 +16,6 @@ registry
 recommenderlab
 RColorBrewer
 wordcloud
+lattice
+caret
+fpc

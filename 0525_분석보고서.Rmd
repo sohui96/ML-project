@@ -1,54 +1,77 @@
 ---
-title: "=__="
-subtitle:
-author: "참치김밥먹고싶다"
-date: "`r format(Sys.Date())`"
+title: <center> <strong> 🎥영화 추천시스템 모델 구축 및 구현 </strong> </center>
+subtitle: <p align="right"> [Analysis Report] </p>
+author: <p align="right"> 2조 (김소희,김영주,유수진,유용빈) </p>
+date: <p align="right"> `r format(Sys.Date())` </p>
 output:
   html_document:
-    fig_height: 6
-    fig_width: 10
-    highlight: textmate
     theme: cosmo
+    highlight: textmate
     toc: yes
     toc_depth: 4
     toc_float: yes
-  pdf_document:
-    fig_height: 6
-    fig_width: 10
-    toc: no
-  word_document:
-    fig_height: 6
-    fig_width: 9
-    toc: no
+    number_sections: true
+    #code_folding: hide
+    df_print: paged
+    mainfont: NanumMyeongjo
+  html_notebook: default
 editor_options: 
   chunk_output_type: console
 ---
 
+<style type="text/css">
+
+h1.title {
+  font-size: 36px;
+  color: DarkRed;
+}
+
+</style>
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo=T, fig.align = "center", message=F, warning=F, fig.height = 8, cache=T, dpi = 300, dev = "png")
+knitr::opts_chunk$set(echo=T, fig.align = "center", message=F, warning=F, fig.height = 6, fig.width = 5,cache=T, dpi = 300, dev = "png")
 ```
 
+**📃Description**
 
-# 1. 추천시스템 모델링
+**📃memo** 
 
+- Code File 구조
+  (1) movies_확인_0525.R
+  (2) movies_탐색_0525.R
+  (3) ratings_탐색_0525.R
+  (4) tags_탐색_0525.R
+  (5) movies_최종데이터구축_0525.R
+  (6) movies_모델링_0525.R - 평점기반
+  (7) movies_모델링2_0525.R - 장르기반
+</br>
+- Code2 File 구조
+  (1) 전처리보고서.Rmd
+  (2) 분석보고서.Rmd
+  
+---
 
+# 추천시스템 모델링: mr dataset
 
-## I 분석환경설정
+## 분석환경설정
 ```{r}
 library(data.table)
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
+library(caret)
 library(recommenderlab)
 #help(package="recommenderlab")
 
+m <- read.csv("./data/movies.csv", header=T)
 r <- read.csv("./data/ratings.csv", header=T)
+t <- read.csv("./data/tags.csv", header=T)
+g <- read.csv("./data/genres.csv", header=T)
+
 mr <- read.csv("./data/mr.csv", header=T)
 final_mr <- spread(mr, key = "title", value = "rating", fill = NA)
 final_mr <- final_mr[,-1]
-```
 
-```{r}
 knitr::kable(head(mr))
 #knitr::kable(head(mr[order(mr$userId),]))
 #knitr::kable(head(mr[order(mr$rating),]))
@@ -65,7 +88,7 @@ recommenderlab 라이브러리는 realRatingMatrix 형식을 사용하기 때문
 
 
 
-## II movie - rating
+## movie - rating
   - 분석 데이터 : 'mr' dataset
   - 분석 기법 : 사용자 평점을 이용한 사용자 기반 협업 필터링 알고리즘(UBCF)을 생각하였고, 더 나은 성능을 보이는 알고리즘도 함께 평가하여 최종 모델(알고리즘)을 결정하고자 함.
 
@@ -167,7 +190,7 @@ random, popular, ubcf, svd, ibcf를 사용. normalize, nn, method, k 옵션 등�
 
 algorithms: n을 어느정도 봐야할까. 그리고 피어슨은 에러있음. not-yet-implemented method for <dgCMatrix> %*% <list> 피어슨은 개별로 되는지 확인필요.
 
-### 1추천 시스템에서의 모형 선택 (평점기준)
+### 추천 시스템에서의 모형 선택 (평점기준)
 ```{r}
 #모형 평가를 위해서 Traing Set과 Test Set 분할
 set.seed(2021)
@@ -202,7 +225,7 @@ plot(results, annotate=1, legend="topleft")
 plot(results2, annotate=1, legend="topleft")
 ```
 
-### 2추천 시스템에서의 모형 선택 (추천목록기준)
+### 추천 시스템에서의 모형 선택 (추천목록기준)
   - 추천목록기준?? evaluate에 들어가는 n 의미무엇?
   
 ```{r}
@@ -230,7 +253,7 @@ plot(results, annotate=1, legend="topleft")
 이를 통해 최종알고리즘 결정
 
 
-### 3. 유사도는 어떻게 계산되고 있을까 (탐색)
+### 유사도는 어떻게 계산되고 있을까 (탐색)
 ```{r}
 # 유사도
 similarity_mat <- similarity(train[1:10,], method = "cosine", which = "users")
@@ -264,7 +287,7 @@ image(movie_ratings[rowCounts(movie_ratings) > minimum_movies,
 
 
 
-### 4. 추천 시스템에서의 모형 선택 (데이터 조정 후 재학습) 아직 실행 X
+### 추천 시스템에서의 모형 선택 (데이터 조정 후 재학습) 아직 실행 X
 ```{r, eval=F}
 # 데이터 조정 후 재학습
 table(rowCounts(df))
@@ -369,7 +392,7 @@ plot(result, "prec/rec", annotate=T,legend="right") #bad..
 
 ---
 
-# 2. 추천시스템 모델링
+# 추천시스템 모델링: mg dataset
 ```{r, warning=F}
 mg <- read.csv('./data/mg.csv', header=T)
 final_mg <- spread(mg, key = "genres", value = "value", fill = NA)
@@ -384,7 +407,7 @@ df2 <- as(final_mg, 'matrix')
 df2 <- as(df2, 'realRatingMatrix')
 ```
 
-## 분석환경설정 I
+## 분석환경설정
   - 분석 데이터 : 'mg' dataset
   - 분석 기법 : 영화 자체 정보를 이용한 아이템 기반 협업 필터링 알고리즘(IBCF)
 
@@ -499,8 +522,7 @@ plot(result, "prec/rec", annotate=T,legend="right") #bad..
 ---
 
 
-
-### 3. 추천영화 시각화
+### 추천영화 시각화
   - 사용자기반(평점)
   
 ```{r}
@@ -552,7 +574,156 @@ wordcloud(words = pre_vec$pre_vec, # 단어
 
 
 
-# 4. 고려사항
+
+
+# 군집화 분석: 장르
+
+  - 데이터셋: 영화 장르 정보
+  - 분류알고리즘: k-means, 계층적군집법, min-hash
+  - 유사도: cosine similarity, Jaccard, Euclidean
+
+## 유저/장르/평점
+
+```{r}
+head(m)
+head(r)
+```
+각 유저(userId)에 대하여 무슨 장르를 선호하는지 (평균평점을)계산하고, 그 정보로 **유저 간 유사도**를 바탕으로 클러스터링을 진행
+
+movies데이터에는 영화id/제목/장르로 구성되어 있고 평점 정보가 있는 rating데이터는 유저id/영화id/평점/시간정보로 구성되어 있다. 
+
+```{r, eval=FALSE}
+user_genres <- merge(m, r, key='movieId', all.y=T)
+user_genres2 <- data.table()
+n <- nrow(user_genres)
+for (i in 1:n){
+  
+  #print(i)
+  
+  name_index <- as.character(user_genres[i, 1])
+  item_index <- as.character(user_genres[i, 3])
+  userId <- as.character(user_genres[i, 4])
+  rating <- as.character(user_genres[i, 5])
+  
+  item_index_split_temp <- data.frame(strsplit(item_index, split = '\\|'))
+  m_temp <- data.frame(cbind(name_index, item_index_split_temp, userId, rating))
+  
+  names(m_temp) <- c("movieId", "genres", "userId", "rating")
+  
+  user_genres2 <- rbind(user_genres2, m_temp)
+}
+rm(name_index, item_index, item_index_split_temp, m_temp)
+user_genres2$rating <- as.numeric(user_genres2$rating)
+user_genres2$genres <- gsub("\\(no genres listed\\)", "Unknown", user_genres2$genres)
+user_genres2 <- as.data.frame(user_genres2)
+glimpse(user_genres2)
+#write.csv(user_genres2, "./data/user_genres.csv",row.names = F)
+```
+클러스터링을 위해 각 유저에 대하여 장르별 평균평점을 계산하여 데이터셋을 구축한다.
+  - 장르 분리
+  - 유저별 장르 평균평점 계산
+
+### 유저별 장르 평균평점 계산
+```{r}
+user_genres2 <- read.csv("./data/user_genres.csv", header=T)
+glimpse(user_genres2)
+
+ug <- user_genres2 %>% group_by(userId, genres) %>% mutate(mean_rating=mean(rating))
+ug <- spread(ug, key = "genres", value = "mean_rating", fill = 0)
+ug <- ug[,-c(1,3)]
+knitr::kable(head(ug))
+```
+클러스터링 유사도
+  - 유클리디안: 각 유저ID의 장르별 평점을 Feature로 간주하여, 말그대로 유클리드 거리를 계산하여 비슷한 유저끼리 묶는 방법
+  - 코사인: 각 유저ID의 장르별 평점을 Feature로 간주하여, 각 유저ID간 벡터의 각도가 비슷한 유저를 묶는 방법
+
+결과:
+유클리드 기반의 ward 계산을 통해 3개의 그룹으로 분류
+
+---
+
+hclust()
+
+method : 클러스터와 관측치와의 거리 계산 기준 
+  - single : 최단거리법
+  - complete : 최장거리법, 완전기준법 
+  - average : 평균기준법 
+  - median : 중앙중심법 
+
+```{r}
+### numeric data - default 유클리드(euclidean)거리
+# d1 <- dist(ug)
+# m1 <- hclust(d1, method = 'average')
+# m2 <- hclust(d1, method = 'complete')
+# m3 <- hclust(d1, method = 'single')
+# m4 <- hclust(d1, method = 'median')
+# m5 <- hclust(d1, method = 'ward.D')
+
+#plot(m1, hang = -10) # hang : 관측치를 맞춰주기 위한 옵션
+#rect.hclust(m1, k = 19) # 클러스터를 k 기준으로 군집
+```
+
+```{r}
+# 1. 거리행렬 구하기
+ug_scaled <- scale(ug[-1]) # 거리 기반이므로 표준화 필요 
+d1 <- dist(ug_scaled[1:10,])
+as.matrix(d1)[1:4,]
+
+# 2. 거리행렬 모델 적용(계층적 군집화)
+fit <- hclust(d1, method="average")  # method의 종류보다는 어떤 의도 하에 분류할 것인지에 따라 설명변수를 선택하는 것이 중요
+plot(fit, hang=-1 , cex=0.8)
+
+# 군집 수 설정
+# library(NbClust)
+# nc <- NbClust(ug[1:10,], distance="euclidean", method="average")
+
+clusters <- cutree(fit, k=5)
+table(clusters)     # 군집별 데이터 개수 확인
+rect.hclust(fit, k=5) 
+```
+
+
+
+## 영화/장르 벡터화
+  - 목적: 영화 분류?
+  - 분류알고리즘: k-means, knn?
+  - 유사도: cosine
+  
+```{r}
+mg <- read.csv("./data/mg.csv", header = T)
+final_mg <- spread(mg, key = "genres", value = "value", fill = 0)
+final_mg <- final_mg[,-1]
+```
+
+```{r}
+### binary data
+# dist(final_mg[,-1], method="binary")
+# dist(final_mg[,-1], method = "Jaccard")
+
+kmeans.mg <- kmeans(final_mg[,-1],3,nstart=5)
+round(sum(kmeans.mg$withinss),2) 
+#kmeans.mg$cluster <- as.factor(kmeans.mg$cluster)
+a=kmeans.mg$cluster
+b=kmeans.mg$center
+
+library(fpc)
+plotcluster(final_mg[-1], a, main = 'k - 평균 군집')
+
+```
+
+[참고](https://velog.io/@yuhayung7296/%EB%B9%84%EC%A7%80%EB%8F%84%ED%95%99%EC%8A%B5-%EA%B8%B0%EB%B2%95%EC%9D%B8-%EA%B5%B0%EC%A7%91%EB%B6%84%EC%84%9Dclustering-%EA%B8%B0%EB%B2%95-in-R)
+
+
+# 연관성 분석: 장르, 태그
+
+  - EDA: 평점 분포, 품사 별 긍부정 분포
+  - word2vec을 활용한 워드임베딩
+  - K-means를 활용한 군집화
+  - 이외에 전처리나 WordCloud
+
+---
+
+# 고려사항
 
   - 패키지 내 다양한 함수들을 보다 적절하게 사용하기 위해 이론 학습은 필요하다.
 
@@ -560,23 +731,24 @@ wordcloud(words = pre_vec$pre_vec, # 단어
 
 ---
 
-# 5. 문제점
+# 문제점
 
 ---
 
-# 6. 희망사항
+# 희망사항
 
   - R과 R shiny를 활용한 추천시스템 구현
   - sample: https://andreasvoglstatworx.shinyapps.io/apptest/
 
 ---
 
-# 참고
+**📃참고**
 
   - http://statkclee.github.io/parallel-r/recommendation-sparklyr.html
   - https://rstatistics.tistory.com/31#- 
-  
   - [R 색상표](https://rfriend.tistory.com/150)
+  - [장르 상관관계를 사용한 영화추천 알고리즘](https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView.kci?sereArticleSearchBean.artiId=ART002625066)
+
 
 
 

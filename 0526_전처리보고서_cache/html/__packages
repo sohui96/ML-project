@@ -13,12 +13,12 @@ naniar
 colorspace
 VIM
 DT
+ggthemes
+multilinguer
+RColorBrewer
+wordcloud
 Matrix
 arules
 proxy
 registry
 recommenderlab
-multilinguer
-RColorBrewer
-wordcloud
-ggthemes
