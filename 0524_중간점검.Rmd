@@ -16,8 +16,10 @@ output:
     fig_height: 6
     fig_width: 10
     toc: no
----
-
+  word_document:
+    fig_height: 6
+    fig_width: 9
+    toc: no
 ---
 
 데이터분석계획>상향식접근방식>비지도학습방법

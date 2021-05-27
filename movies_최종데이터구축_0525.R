@@ -16,15 +16,15 @@ m$idx <- 1:nrow(m)
 #movies - rating 병합
 mr <- merge(m, r, key='movieId', all.y=T)
 mr <- mr[,-c(1,7)]
-write.csv(mr, "./data/mr.csv",row.names = F)
-
 mr <- mr[,-c(2,3)]
+
 sum(duplicated(mr)) #[1] 3
 which(duplicated(mr)|duplicated(mr,fromLast=T))
 mr[which(duplicated(mr)|duplicated(mr,fromLast=T)),]
 mr <- mr[-which(duplicated(mr)|duplicated(mr,fromLast=T)),]
 mr <- mr[-c(80209,88669),]
-
+write.csv(mr, "./data/mr.csv",row.names = F)
+##
 final_mr <- spread(mr, key = "title", value = "rating", fill = NA)
 final_mr <- final_mr[,-1]
 write.csv(m, "./data/final_mr.csv",row.names = F)
