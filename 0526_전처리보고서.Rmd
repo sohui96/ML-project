@@ -28,7 +28,7 @@ editor_options:
 knitr::opts_chunk$set(echo=T, fig.align = "center", message=F, warning=F, fig.height = 8, cache=T, dpi = 300, dev = "png")
 ```
 
-# 05월 26일 기준 code file 구조
+# 0. 05월 26일 기준 code file 구조
  
   (1) movies_확인_0525.R
   (2) movies_탐색_0525.R
@@ -38,10 +38,11 @@ knitr::opts_chunk$set(echo=T, fig.align = "center", message=F, warning=F, fig.he
   (6) movies_모델링_0525.R - 평점기반
   (7) movies_모델링2_0525.R - 장르 기반
   
+  >
   (1) ~ (5) = 전처리파일
   (6) ~ (7) = 모델링파일
 
-# 사용자 기반의 추천시스템 모델링
+# 1. 사용자 기반의 추천시스템 모델링
 
 ## I 분석환경설정
 ```{r}
@@ -52,8 +53,9 @@ library(dplyr)
 library(naniar)
 library(VIM)
 library(DT)
-library(ggplot2)
 #시각화에 필요한 라이브러리
+library(ggplot2)
+library(ggthemes)
 library(multilinguer)
 library(RColorBrewer)
 library(wordcloud)
@@ -69,6 +71,10 @@ r <- read.csv('./data/ratings.csv',header=T) # r = ratings
 t <- read.csv('./data/tags.csv',header=T) # t = tags
 
 ### 2-2.데이터확인
+knitr::kable(head(m))
+knitr::kable(head(r))
+knitr::kable(head(t))
+
 df=m
 #df=r
 #df=t
@@ -98,31 +104,138 @@ naniar::gg_miss_var(df)
 ### 1. 평점 값 탐구
 
 ```{r}
-unique(r$rating)
-# [1] 4.0 5.0 3.0 2.0 1.0 4.5 3.5 2.5 0.5 1.5
+unique(sort(r$rating))
 ```
 평점데이터는 0 ~ 5.0 점까지 0.5 단위로 구성된다.
 
 ```{r}
 table_rating <- table(r$rating)
 table_rating
-#   0.5     1   1.5     2   2.5     3   3.5     4   4.5     5 
-#  1370  2811  1791  7551  5550 20047 13136 26818  8551 13211 
+
+r2 <- r %>% group_by(rating) %>% summarise(n=n())
+    ggplot(data=r2 ,aes(x=rating,y=n,fill=n)) +
+    geom_bar(stat="identity") +
+    ggtitle("평점 분포도") +
+    xlab("평점") + ylab("평점횟수") + theme_minimal() +
+    theme(plot.title=element_text(size=20, color="black")) +
+    annotate(geom = "rect", xmin = 2.7, xmax =4.3, ymin = 0, ymax = 30000, fill = "blue", alpha = 0.2, colour = "black", lty = 2)
+
+
+# ggplot(r,aes(x=rating)) +  
+#   geom_bar(fill = c("gray","gray","gray","gray","gray","blue","blue","blue","gray","gray")) +
+#   ggtitle("평점 분포도") +
+#   xlab("평점") + ylab("평점횟수") + theme_bw() +
+#   theme(plot.title=element_text(size=20, colour = "black"))
+
 ```
 각 평점들의 빈도수를 table() 을 통해 파악한다.
 
-```{r}
-vector_ratings <- factor(r$rating)
-qplot(vector_ratings) + ggtitle("Distribution of the ratings")
-```
-각 평점들의 빈도수 분포를 시각화한 결과 대부분 평점들은 3점 이상이며 4점이 일반적인 데이터라고 해석 할 수 있다.
+각 평점들의 빈도수 분포를 시각화한 결과 대부분 평점들은 3점 이상이며 4점인 일반적인 데이터라고 해석 할 수 있다.
 
-### 2. 영화 조회수 
+### 2. 평점 Boxplot
 ```{r}
-df_ratings_means<-r %>% group_by(movieId) %>% summarise(mean_rating = mean(rating), n=n()) %>% arrange(desc(n)) %>% head(10)
-barplot(df_ratings_means$n ~ df_ratings_means$movieId)
+r_rmna <- r %>% filter(!is.na(rating))
+
+ggplot(r_rmna) +
+  geom_boxplot(aes(x = rating), fill="blue", alpha = 0.3, outlier.color = 'blue', outlier.size = 4) +
+  theme_minimal() +
+  ggtitle("평점 Boxplot") +
+  xlab("") + ylab("") +
+  theme(plot.title=element_text(size=20, color="black"))
+
+summary(r$rating)
 ```
-원 데이터에서 user들(610명) 이 가장 많이 조회, 평가한 영화 상위 10개의 랭크는
+목적: 수집한 평점의 이상치 확인
+방법: boxplot
+
+분석결과
+1) 획득한 평점의 중앙값은 약3.5
+2) 3Q: 평점이 약 4점이상이면 상위 25%내에 포함된다.
+3) 1Q: 평점이 약 3점이하이면 하위 25%내에 포함된다.
+4) 3~4점대의 평점들은 획득한 평점들의 약 60%에 해당한다.
+5) 이상치: 약 1.5이하의 평점들은 평점들 분포 약 99%이내 포함되지 못한다.
+6) 이상치에 해당하는 영화를 확인한다.
+
+결론: 
+이상치에 해당하는 영화를 재 검토한다. 3~4점대 평점을 갖는 영화들 중 최저/최고점을 확인해본다.
+
+영화 추천의 목표는 사용자가 스스로 파악하지 못한 것을 추천해주는 것이다.
+
+위 결과에서 이상치는 일반적인 성향을 파악하는데 오차를 발생시킬 수 있다.
+
+이상치 처리전 해당 영화가 무엇인지 찾아본다. 
+
+개인의 평점이기 때문에 샘플링할 것인지 제거할 것인지 의논해본다.
+
+### 2-2. 영화분포도
+```{r}
+##
+r2<-r %>% group_by(movieId) %>% summarise(mean_rating = mean(rating), n=n())
+
+ggplot(data=r2,aes(y=r2$mean_rating)) + geom_boxplot() + 
+  ggtitle("평점 Boxplot") +
+  xlab("") + ylab("") + theme_minimal() +
+  theme(plot.title=element_text(size=20, color="black")) +
+  coord_flip()
+
+##
+df_ratings_means <- r %>% 
+  group_by(movieId) %>% 
+  summarise(mean_rating = mean(rating), n=n()) %>% 
+  arrange(desc(n))
+
+ggplot()+geom_point(mapping=aes(x=mean_rating, y=n), data=df_ratings_means, color = 'blue') + annotate(geom = "rect", xmin = 1.5, xmax = 4.5, ymin = 25, ymax = 350, fill = "blue", alpha = 0.1, colour = "black", lty = 2) + theme_minimal() +
+  ggtitle("영화분포도") +
+  xlab("평균 평점") + ylab("평가 횟수") +
+  theme(plot.title=element_text(size=20, color="black"))
+
+```
+>영화 별로 그룹으로 묶고 영화별 평점을 구한다. 구한 영화별 평점을 기반으로 Boxplot을 만든다. 대부분의 영화 평점이 3~4점 사이에 존재하지만 이상치로 나오는 낮은 평점의 영화들을 찾아 그 영화를 분석해본다.(ex. 몇 명의 사람이 평가 했는지 등등)
+
+
+>각영화의 평균 평점을 구하고 평균 평점에 대해 어떠한 영화들이 많이 조회되었는지 확인 할 수 있다. 사람들이 많이 조회한 영화들은 대부분 3 ~ 4 점 사이에 많이 분포되어 있고 극단값인 0, 5 점은 소수의 사람들에게 평가 받았다고 판단 할 수도 있다.
+
+  => 극단 값으로 평가된 영화들은 제외할 수 있는지??
+
+
+>해당 박스 부분은 여러사용자들에게 평가횟수(25회 이상)를 받은 영화들의 평균적인 평점 지표를 나타낸다. 이를 통해 이상치로 발견되는 평균평점 1이하, 5점 이면서 평가횟수 25회 미만인 영화들은 소수의 사람들의 주관이 들어간 것으로 판단하여 알고리즘 모델링에 공정하지 않은 데이터로 판단한다..
+
+
+### 2-3. 100명 미만 영화분포도
+```{r}
+down <-  subset(df_ratings_means,n <=100)
+
+ggplot()+
+  geom_point(mapping=aes(x=mean_rating, y=n), data=down, color = 'blue') + 
+  annotate(geom = "rect", xmin = 1.5, xmax = 4.5, ymin = 25, 
+           ymax = 110, fill = "purple", alpha = 0.1, colour = "black", lty = 2) +
+  ggtitle("100명 미만 영화분포도") +
+  xlab("평균 평점") + ylab("평가 횟수") +
+  theme(plot.title=element_text(size=20, color="black")) +
+  theme_minimal()
+
+```
+많은 데이터가 분포하고 있는 평가횟수 100미만인 영화들의 분포로만 축소시킨 산포도. 
+
+=> 위 산포도를 통해 평가 횟수를 25회 이상 받은 데이터들이 일부 소수의 극단평가 영화가 아닌 데이터로 사용하는것으로 판단
+
+
+### 3. 영화 조회수 
+```{r}
+df_ratings_means <- r %>% 
+  group_by(movieId) %>% 
+  summarise(mean_rating = mean(rating), n=n()) %>% 
+  arrange(desc(n)) %>% head(10)
+
+mybar = barplot(df_ratings_means$n ~ df_ratings_means$movieId, col="steelblue",
+        names.arg=c('포레스트 검프','쇼생크 탈출','펄프 픽션','양들의 침묵','매트릭스','스타워즈','쥬라기공원','브레이브하트','터미네이터2','쉰들러 리스트'),
+        main="사용자 평가율 영화 Top10", xlab="", ylab="", las=2, horiz=T,
+        cex.names=.59)
+
+# text(x=mybar, labels=paste(df_ratings_means$n,"명"), col="black", cex=.8, adj = c(-10.5,1))
+```
+
+원 데이터에서 user들(610명) 이 가장 많이 조회, 평가한 영화 상위 10개의 랭크는 아래와 같다.
 
 >
 movieId : 356 = Forrest Gump (1994)  포레스트 검프
@@ -136,15 +249,8 @@ movieId : 110 = Braveheart (1995) 브레이브하트
 movieId : 589 = Terminator 2: Judgment Day (1991) 터미네이터2
 movieId : 527 = Schindler's List (1993) 쉰들러 리스트 
 
-순이며 상위 1,2,3순위 랭크는 사용자 절반이상 (300명) 조회,평가한 영화인 점을 알 수 있다.
+상위 1,2,3순위 랭크는 사용자 절반이상 (300명) 조회,평가한 영화인 점을 알 수 있다.
 
-```{r}
-ggplot()+geom_point(mapping=aes(x=mean_rating, y=n), data=df_ratings_means, color = 'blue')
-```
-각영화의 평균 평점을 구하고 평균 평점에 대해 어떠한 영화들이 많이 조회되었는지
-확인 할 수 있다. 사람들이 많이 조회한 영화들은 대부분 3 ~ 4 점 사이에 많이 분포되어 있고 극단값인 0, 5 점은 소수의 사람들에게 평가 받았다고 판단 할 수도 있다.
-
-  => 극단 값으로 평가된 영화들은 제외할 수 있는지??
 
 ```{r}
 #영화별 평점
@@ -160,7 +266,9 @@ ggplot()+geom_point(mapping=aes(x=mean_rating, y=n), data=df_ratings_means, colo
 # hist(r2[,2], main = colnames(r2)[1], breaks = 50, xlab = "평점")
 ```
 
-### 3. Tag 텍스트마이닝
+
+
+### 5. Tag 텍스트마이닝
 ```{r}
 t2 <- tolower(t$tag)
 sort(t2, decreasing = T) #정렬
@@ -171,28 +279,6 @@ wordcloud(names(t3), freq=t3, scale=c(10,1), rot.per=0.1, min.freq=15,
 ```
 사용자들이 영화별로 남긴 태그들을 텍스트마이닝한 결과이다. 가장 많은 tag comment를 남긴 keyword들은 atmospheric, superhero, funny, thought-provoking, surreal 정도이다.
 
-### 4. 영화 평점 데이터 (x축 movieId, y축 영화 평점 평균)
-```{r}
-#movieId를 그룹으로 영화 평점 추출
-df_ratings_means <- r %>% group_by(movieId) %>% summarise(mean_rating = mean(rating), n=n())
-
-# 10명 이상 평가한 영화만 그래프에 표시
-df_ratings_means_n_over10 <- subset(df_ratings_means,n >=10)
-str(df_ratings_means_n_over10)
-
-#View(df_ratings_means_n_over10)
-#막대그래프
-barplot(df_ratings_means_n_over10$mean_rating~df_ratings_means_n_over10$movieId)
-
-#산점도 그래프
-ggplot(data=df_ratings_means_n_over10,aes(x=df_ratings_means_n_over10$movieId,y=df_ratings_means_n_over10$mean_rating))+geom_point()
-
-#산점도 그래프
-plot(df_ratings_means_n_over10$movieId, df_ratings_means_n_over10$mean_rating)
-
-#꺾은선 그래프
-plot(df_ratings_means_n_over10$movieId,df_ratings_means_n_over10$mean_rating,type='l')
-```
 
 ## Ⅳ 최종데이터구축
 
@@ -250,6 +336,12 @@ g$genres<- gsub("\\(no genres listed\\)", NA, g$genres)
 barplot(table(g$genres))
 g <- as.data.frame(g)
 
+# 
+# mybar = barplot(df_ratings_means$n ~ df_ratings_means$movieId, col="steelblue",
+#         names.arg=c('포레스트 검프','쇼생크 탈출','펄프 픽션','양들의 침묵','매트릭스','스타워즈','쥬라기공원','브레이브하트','터미네이터2','쉰들러 리스트'),
+#         main="사용자 평가율 영화 Top10", xlab="", ylab="", las=2, horiz=T,
+#         cex.names=.59)
+
 #write.csv(g, "./data/genres.csv",row.names = F)
 ```
 
@@ -267,6 +359,3 @@ movies, ratings 을 이용하여 최종 mr, mg 데이터셋 구축완료
 
   - final_mr, final_mg 와 같은 분석에 들어가는 데이터셋은 분석 할 때 바꿔야함.
   - 혹은 Rdata로 저장.
-
-
-

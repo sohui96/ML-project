@@ -29,7 +29,9 @@ knitr::opts_chunk$set(echo=T, fig.align = "center", message=F, warning=F, fig.he
 ```
 
 
-# 사용자 기반의 추천시스템 모델링
+# 1. 추천시스템 모델링
+
+
 
 ## I 분석환경설정
 ```{r}
@@ -55,12 +57,19 @@ knitr::kable(table(r$rating))
 df <- as(final_mr, 'matrix') 
 df <- as(df, 'realRatingMatrix')
 ```
+첫 번째 테이블은 본 모델링 작업에 사용할 데이터 내용물
+
+두 번째 테이블은 평점분포를 대략적으로 알 수 있다.
+
+recommenderlab 라이브러리는 realRatingMatrix 형식을 사용하기 때문에 데이터 형식을 변환해준다.
 
 
-## II
+
+## II movie - rating
   - 분석 데이터 : 'mr' dataset
-  - 분석 기법 : 사용자 평점을 이용한 사용자 기반 협업 필터링 알고리즘(UBCF)
-  
+  - 분석 기법 : 사용자 평점을 이용한 사용자 기반 협업 필터링 알고리즘(UBCF)을 생각하였고, 더 나은 성능을 보이는 알고리즘도 함께 평가하여 최종 모델(알고리즘)을 결정하고자 함.
+
+### 어떻게 나오는지 확인1
 ```{r}
 set.seed(2021)
 index <- sample(1:nrow(df), size = nrow(df)*0.7)
@@ -80,8 +89,148 @@ table(unlist(lapply(pre_list, length)))
 knitr::kable(pre_list[])
 ```
 데이터를 7:3 비율로 train 과 test 데이터셋으로 분할한다.
-먼저 파라미터를 신경 쓰지 않고 간단한 사용자 기반의 추천 시스템 모델링을 구현한다. 구현된 모형 rec를 가지고 추천 영화 10개를 출력한다. - 리스트를 벡터에 담아서 워드클라우드로 시각화
+먼저 파라미터를 신경 쓰지 않고 간단한 사용자 기반의 추천 시스템 모델링을 구현해봄. 구현된 모형 model1을 가지고 추천 영화 10개를 출력한다. - 리스트를 벡터에 담아서 워드클라우드로 시각화해보자.
 
+### 어떻게 나오는지 확인2 실행x
+
+  - 추천시스템에 사용되는 모델 즉, 여러 알고리즘과 각 알고리즘에 파라미터 튜닝에 관하여
+```{r, eval=F}
+## 1 (학습 단계)
+################
+model1 <- Recommender(train, method = 'POPULAR') #평점이 높은 영화 순(인기순)으로 추천
+model2 <- Recommender(train, method = 'POPULAR', param=list(normalize = 'Z-score')) #평점 데이터를 사용자별로 표준화
+model3 <- Recommender(train, method='UBCF', param=list(method='pearson')) #피어슨 상관계수를 이용하여 추천
+model4 <- Recommender(train, method='UBCF', param=list(method='cosine')) #코사인 유사도를 이용하여 추천
+model5 <- Recommender(m, method='UBCF', param=list(method='cosine', nn=50)) #특정 사용자와 인접한 이웃의 수를 50으로 설정
+
+model6 <- Recommender(m, method = "IBCF", param=list(method = 'pearson'))
+model7 <- Recommender(m, method = "IBCF", param=list(method = 'pearson', normalize_sim_matrix = T)) #유사도를 행별로 normalize(행별로 유사도 합이 1이 되도록 재조정) 한 후 피어슨 상관계수를 이용하여 추천
+model8 <- Recommender(m, method = "IBCF", param=list(method = 'cosine', normalize_sim_matrix = T, k=5))
+
+## 차원 축소를 이용한 영화 추천
+model9 <- Recommender(train, method = "SVD", param=list(k = 10)) #10개의 차원으로 축소
+model10 <- Recommender(train, method = "SVD", param=list(k = 20, normalize='Z-score')) #20개의 차원으로 축소
+
+
+
+## 2 (추천 단계)
+################
+#1번(첫번째) 사람에 대해 평점 예측
+who <- 1
+as(predict(model1, m[who, ], type = 'ratings'), 'list')
+
+#1번(첫번째) 사람에 대해 평점을 예측후 평점이 높은 영화 5개만 추천
+as(predict(model1, m[who, ], type = 'topNList', n=5), 'list')
+
+
+
+#Explain
+################
+#Collaborative Filtering 조정할 수 있는 파라미터보기
+#recommenderRegistry$get_entry(method = 'UBCF')
+#recommenderRegistry$get_entry(method = 'IBCF')
+
+#SVD 에서 조정할 수 있는 파라미터
+#recommenderRegistry$get_entry(method = 'SVD')
+```
+위 알고리즘들은 반복되서 사용될 것이기 때문에 사용자정의함수로 정의해 놓는다.
+
+### 평가할 알고리즘 함수 정의
+```{r}
+algorithms <- list(
+  
+  "random"  = list(name="RANDOM"),
+  "popular" = list(name="POPULAR"), 
+  "popularZ" = list(name="POPULAR", param=list(normalize = "Z-score")),
+  
+  "userN10C" = list(name="UBCF", param=list(normalize = NULL, nn = 10, method = 'cosine')),
+  "userN50C" = list(name="UBCF", param=list(normalize = NULL, nn = 50, method = 'cosine')),
+  "userC50C" = list(name="UBCF", param=list(normalize = 'center', nn = 50, method = 'cosine')),
+  "userZ50C" = list(name="UBCF", param=list(normalize = 'Z-score', nn = 50, method = 'cosine'))
+  
+  # "userN10P" = list(name="UBCF", param=list(normalize = NULL, nn = 10, method = 'pearson')), #오류
+  # "userN50P" = list(name="UBCF", param=list(normalize = NULL, nn = 50, method = 'pearson')), #오류
+  # "userC50P" = list(name="UBCF", param=list(normalize = 'center', nn = 50, method = 'pearson')), #오류
+  # "userZ50P" = list(name="UBCF", param=list(normalize = 'Z-score', nn = 50, method = 'pearson')) #오류
+)
+
+algorithms2 <- list(
+  
+  'SVDZ10PT' = list(name="SVD", param=list(normalize = 'Z-score', k = 10)),
+  'SVDZ50PT' = list(name="SVD", param=list(normalize = 'Z-score', k = 50)),
+  'SVDZ100PT' = list(name="SVD", param=list(normalize = 'Z-score', k = 100))
+)
+```
+random, popular, ubcf, svd, ibcf를 사용. normalize, nn, method, k 옵션 등이 있다.
+
+각 알고리즘의 개념정도와 갑 옵션의 의미 찾기.
+
+algorithms: n을 어느정도 봐야할까. 그리고 피어슨은 에러있음. not-yet-implemented method for <dgCMatrix> %*% <list> 피어슨은 개별로 되는지 확인필요.
+
+### 1추천 시스템에서의 모형 선택 (평점기준)
+```{r}
+#모형 평가를 위해서 Traing Set과 Test Set 분할
+set.seed(2021)
+scheme <- evaluationScheme(df, method="split",
+                           train = .8, k = 3, given = 15) 
+#k: 심플하게 k를 여러번 할수록 잘 섞인다.
+#given: 특정 정보에 편향되지 않게, 최소한 영화를 15개 본 유저정보를 활용하겠다.
+scheme@runsTrain
+
+#Training Set으로 각 알고리즘에 대해서 학습 후 Test Set을 이용하여 정확도 평가
+results <- evaluate(scheme, algorithms, type='ratings')
+results2 <- evaluate(scheme, algorithms2, type='ratings')
+
+#각 모형에 대한 정확도 확인
+names(results)
+names(results2)
+
+for (i in names(results)){
+  
+  print(i)
+  print(getConfusionMatrix(results[[i]]))
+}
+
+for (i in names(results2)){
+  
+  print(i)
+  print(getConfusionMatrix(results2[[i]]))
+}
+
+#각 모형에 대한 정확도 시각화
+plot(results, annotate=1, legend="topleft")
+plot(results2, annotate=1, legend="topleft")
+```
+
+### 2추천 시스템에서의 모형 선택 (추천목록기준)
+  - 추천목록기준?? evaluate에 들어가는 n 의미무엇?
+  
+```{r}
+#모형 평가를 위해서 Traing Set과 Test Set 분할하기: 
+#단, 3점 이상일 경우 재미있게 봤다고 가정
+set.seed(2021)
+scheme <- evaluationScheme(df, method="split",
+                           train = .8, k = 1, given = 15, goodRating = 3)
+
+#Training Set으로 각 알고리즘에 대해서 학습 후 Test Set을 이용하여 정확도 평가
+results <- evaluate(scheme, algorithms, type='topNList', n=c(1, 3, 5, 10, 15, 20))
+
+#각 모형에 대한 정확도 확인
+names(results)
+
+for (i in names(results)){
+  
+  print(i)
+  print(getConfusionMatrix(results[[i]]))
+}
+
+#정확도 결과 그래프로 나타내기
+plot(results, annotate=1, legend="topleft")
+```
+이를 통해 최종알고리즘 결정
+
+
+### 3. 유사도는 어떻게 계산되고 있을까 (탐색)
 ```{r}
 # 유사도
 similarity_mat <- similarity(train[1:10,], method = "cosine", which = "users")
@@ -113,23 +262,35 @@ image(movie_ratings[rowCounts(movie_ratings) > minimum_movies,
 
 ```
 
-```{r}
+
+
+### 4. 추천 시스템에서의 모형 선택 (데이터 조정 후 재학습) 아직 실행 X
+```{r, eval=F}
 # 데이터 조정 후 재학습
 table(rowCounts(df))
 mean(rowCounts(df))
 data_modify <- df[rowCounts(df) <= 165.2918]
 dim(data_modify)
-
 boxplot(Matrix::rowMeans(data_modify), horizontal=T)
-```
 
-```{r}
-model1 <- Recommender(train, method = "RANDOM")
-model2 <- Recommender(train, method = "POPULAR")
-model3 <- Recommender(train, method = "UBCF")
-model4 <- Recommender(train, method = "IBCF")
-model5 <- Recommender(train, method = "SVD")
 
+
+# "split", cross val.
+set.seed(2021)
+scheme <- evaluationScheme(data_modify, method="split",
+                           train = .8, k = 3, given = 15) 
+
+results <- evaluate(scheme, algorithms, type='ratings')
+results2 <- evaluate(scheme, algorithms2, type='ratings')
+
+plot(results, annotate=1, legend="topleft")
+plot(results2, annotate=1, legend="topleft")
+
+
+
+
+# 최종 알고리즘 결정 된 것에 대하여 
+model1 <- Recommender(train, method = 'POPULAR')
 pre <- predict(model1, newdata=test[1], n=10) #test 1 ~ 183
 # as(pre, "list")
 
@@ -137,9 +298,9 @@ pre <- predict(model1, newdata=test[1], n=10) #test 1 ~ 183
 pre_list <- sapply(pre@items, function(x) {colnames(train)[x]})
 table(unlist(lapply(pre_list, length)))
 knitr::kable(pre_list[])
-```
 
-```{r}
+
+# split, "cross val."
 eval_sets <- evaluationScheme(data = data_modify,
                               method = "cross-validation",
                               train = 0.7,
@@ -160,9 +321,8 @@ pred_eval <- predict(model1,
                      newdata = getData(eval_sets, "known"),
                      n = 10, type = "ratings")
 pred_eval
-```
 
-```{r}
+
 # Calculate accuracy
 accuracy_model1 <- calcPredictionAccuracy(x=pred_eval,
                                         data=getData(eval_sets, "unknown"),
@@ -184,9 +344,9 @@ algorithms <- list(
 result <- evaluate(eval_sets, algorithms, n=n_recommendations)
 result
 avg(result) #precision(정밀도), recall(재현율)
-```
 
-```{r}
+
+
 plot(result, annotate=T, legend="right", main = "ROC Curve")
 plot(result, "prec/rec", annotate=T,legend="right") #bad.. 
 # plot(result2, annotate=T, legend="topleft")
@@ -209,7 +369,7 @@ plot(result, "prec/rec", annotate=T,legend="right") #bad..
 
 ---
 
-# 아이템 기반의 추천시스템 모델링
+# 2. 추천시스템 모델링
 ```{r, warning=F}
 mg <- read.csv('./data/mg.csv', header=T)
 final_mg <- spread(mg, key = "genres", value = "value", fill = NA)
@@ -227,7 +387,28 @@ df2 <- as(df2, 'realRatingMatrix')
 ## 분석환경설정 I
   - 분석 데이터 : 'mg' dataset
   - 분석 기법 : 영화 자체 정보를 이용한 아이템 기반 협업 필터링 알고리즘(IBCF)
+
+### 평가할 알고리즘 함수 정의
+```{r, eval=F}
+algorithms <- list(
   
+  "random"  = list(name="RANDOM"),
+  "popular" = list(name="POPULAR"), 
+  "popularZ" = list(name="POPULAR", param=list(normalize = "Z-score")),
+  
+  "itemZ100PF" = list(name="IBCF", param=list(normalize = 'Z-score', k = 100, method = 'pearson', normalize_sim_matrix = F)),
+  "itemZ100PT" = list(name="IBCF", param=list(normalize = 'Z-score', k = 100, method = 'pearson', normalize_sim_matrix = T)),
+  "itemZ100CF" = list(name="IBCF", param=list(normalize = 'Z-score', k = 100, method = 'cosine', normalize_sim_matrix = F)),
+  "itemZ100CT" = list(name="IBCF", param=list(normalize = 'Z-score', k = 100, method = 'cosine', normalize_sim_matrix = T)),
+  "itemZ500PT" = list(name="IBCF", param=list(normalize = 'Z-score', k = 500, method = 'pearson', normalize_sim_matrix = T)),
+  "itemZ500CT" = list(name="IBCF", param=list(normalize = 'Z-score', k = 500, method = 'cosine', normalize_sim_matrix = T)),
+  
+  'SVDZ10PT' = list(name="SVD", param=list(normalize = 'Z-score', k = 10)),
+  'SVDZ50PT' = list(name="SVD", param=list(normalize = 'Z-score', k = 50)),
+  'SVDZ100PT' = list(name="SVD", param=list(normalize = 'Z-score', k = 100)),
+)
+```
+
 ```{r, eval=F}
 set.seed(2021)
 index <- sample(1:nrow(df2), size = nrow(df2)*0.7)
@@ -317,7 +498,61 @@ plot(result, "prec/rec", annotate=T,legend="right") #bad..
 
 ---
 
-# 고려사항
+
+
+### 3. 추천영화 시각화
+  - 사용자기반(평점)
+  
+```{r}
+n=300
+pre <- predict(model1, newdata=test[2], n) #test 1 ~ 183
+min_rating <- min(pre@ratings[[1]])
+max_rating <- max(pre@ratings[[1]])
+e_value <- (max_rating-min_rating)/10
+
+# just check
+pre_list <- sapply(pre@items, function(x) {colnames(train)[x]})
+pre_ratings <- pre@ratings[[1]]
+for(i in 1:n){
+  if(pre_ratings[i] <= max_rating && pre_ratings[i] > max_rating-e_value){
+    pre_ratings[i] <- 100 #가중치 100
+  }else if(pre_ratings[i] <= max_rating-e_value && pre_ratings[i] > max_rating-e_value*2){
+    pre_ratings[i] <- 90 #가중치 90
+  }else if(pre_ratings[i] <= max_rating-e_value*2 && pre_ratings[i] > max_rating-e_value*4){
+    pre_ratings[i] <- 70 #가중치 70
+  }else if(pre_ratings[i] <= max_rating-e_value*4 && pre_ratings[i] > max_rating-e_value*6){
+    pre_ratings[i] <- 50 #가중치 50
+  }else{
+    pre_ratings[i] <- 25
+  }
+}
+
+table(unlist(lapply(pre_list, length)))
+knitr::kable(pre_list[])
+# 
+library(RColorBrewer)
+library(wordcloud)
+pre_vec <- c(pre_list)
+pre_vec <- as.data.frame(pre_vec)
+pre_vec[ , "freq" ] <- c(pre_ratings)
+set.seed(1234)
+par(bg="black")
+pal<- brewer.pal(7,"YlOrRd")
+wordcloud(words = pre_vec$pre_vec, # 단어 
+                         freq = pre_vec$freq, # 빈도
+                         min.freq = 25, # 최소 단어 빈도
+                         max.words = 300, # 표현 단어 수 
+                         random.order = F, # 고빈도 단어 중앙 배치
+                         rot.per = 0, # 회전 단어 비율 
+                         scale = c(1, 0.25), # 단어 크기 범위
+                         colors = pal) # 색깔 목록
+
+
+```
+
+
+
+# 4. 고려사항
 
   - 패키지 내 다양한 함수들을 보다 적절하게 사용하기 위해 이론 학습은 필요하다.
 
@@ -325,16 +560,23 @@ plot(result, "prec/rec", annotate=T,legend="right") #bad..
 
 ---
 
-# 문제점
+# 5. 문제점
 
 ---
 
-# 희망사항
+# 6. 희망사항
 
   - R과 R shiny를 활용한 추천시스템 구현
   - sample: https://andreasvoglstatworx.shinyapps.io/apptest/
 
+---
 
+# 참고
+
+  - http://statkclee.github.io/parallel-r/recommendation-sparklyr.html
+  - https://rstatistics.tistory.com/31#- 
+  
+  - [R 색상표](https://rfriend.tistory.com/150)
 
 
 
